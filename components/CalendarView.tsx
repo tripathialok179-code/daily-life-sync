@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import { TodoItem, JournalEntry, AppView } from '../types';
+import { TodoItem, JournalEntry, AppView, isTaskActiveOnDate, isTaskCompletedOnDate, getLocalTodayString, formatLocalDate } from '../types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, BookOpen, CheckCircle2, Circle, Trophy, ArrowRight, Plus, X } from 'lucide-react';
 import Ripple from './Ripple';
 
@@ -8,10 +7,11 @@ interface CalendarViewProps {
   todos: TodoItem[];
   journalEntries: JournalEntry[];
   setTodos: React.Dispatch<React.SetStateAction<TodoItem[]>>;
+  setJournalEntries: React.Dispatch<React.SetStateAction<JournalEntry[]>>;
   navigateTo: (view: AppView) => void;
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setTodos, navigateTo }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setTodos, setJournalEntries, navigateTo }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -39,7 +39,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
     const blanks = Array.from({ length: firstDay }, (_, i) => i);
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalTodayString();
 
     return (
       <div className="grid grid-cols-7 gap-2 sm:gap-3">
@@ -55,11 +55,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
           const dateStr = formatDate(year, month, day);
           const isToday = dateStr === todayStr;
           
-          const dayTasks = todos.filter(t => !t.archived && t.dueDate === dateStr);
-          const completedTasks = todos.filter(t => t.archived && t.completedAt?.startsWith(dateStr));
-          const dayJournal = journalEntries.find(j => j.date === dateStr);
+          // Compute dynamic status
+          const activeTasks = todos.filter(t => !t.archived && isTaskActiveOnDate(t, dateStr));
+          const hasUncompleted = activeTasks.some(t => !isTaskCompletedOnDate(t, dateStr));
+          const hasCompleted = activeTasks.length > 0 && activeTasks.every(t => isTaskCompletedOnDate(t, dateStr));
+          const hasJournal = journalEntries.some(j => j.date === dateStr);
           
-          const hasActivity = dayTasks.length > 0 || completedTasks.length > 0 || dayJournal;
+          const hasActivity = activeTasks.length > 0 || hasJournal;
 
           return (
             <button
@@ -80,20 +82,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
                 {day}
               </span>
               
-              {/* Dots Indicator for compact view */}
+              {/* Dots Indicator with high-end glowing effect */}
               <div className="flex gap-1 items-center mt-1 pointer-events-none">
-                {dayJournal && <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_5px_rgba(192,132,252,0.8)]" />}
-                {dayTasks.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-brand-400 shadow-[0_0_5px_rgba(56,189,248,0.8)]" />}
-                {completedTasks.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.8)]" />}
-              </div>
-
-              {/* Hover Info */}
-              <div className="absolute inset-x-0 bottom-0 p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-black/90 dark:via-black/50 pointer-events-none">
-                 {hasActivity && (
-                   <div className="flex justify-center">
-                     <div className="h-1 w-8 bg-gray-300 dark:bg-gray-600 rounded-full" />
-                   </div>
-                 )}
+                {hasJournal && <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_5px_rgba(192,132,252,0.8)]" />}
+                {hasUncompleted && <div className="w-1.5 h-1.5 rounded-full bg-brand-400 shadow-[0_0_5px_rgba(56,189,248,0.8)]" />}
+                {hasCompleted && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.8)]" />}
               </div>
             </button>
           );
@@ -102,27 +95,57 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
     );
   };
 
-  const toggleTask = (id: string) => {
-    setTodos(prev => prev.map(t => {
-      if (t.id === id) {
-        const newStatus = !t.completed;
-        return { ...t, completed: newStatus, completedAt: newStatus ? new Date().toISOString() : undefined };
-      }
-      return t;
-    }));
+  const toggleTask = (todo: TodoItem) => {
+    if (!selectedDate) return;
+    if (todo.recurrence === 'none') {
+      const nextStatus = !todo.completed;
+      setTodos(prev => prev.map(t => {
+        if (t.id === todo.id) {
+          return { ...t, completed: nextStatus, completedAt: nextStatus ? new Date().toISOString() : undefined };
+        }
+        return t;
+      }));
+    } else {
+      const completed = todo.completedDates || [];
+      const nextCompleted = completed.includes(selectedDate)
+        ? completed.filter(d => d !== selectedDate)
+        : [...completed, selectedDate];
+
+      setTodos(prev => prev.map(t => {
+        if (t.id === todo.id) {
+          return { ...t, completedDates: nextCompleted };
+        }
+        return t;
+      }));
+    }
+  };
+
+  const handleWriteJournal = () => {
+    if (!selectedDate) return;
+    const newId = crypto.randomUUID();
+    const newEntry: JournalEntry = {
+      id: newId,
+      date: selectedDate,
+      title: '',
+      content: '',
+      mood: 'neutral',
+      tags: []
+    };
+    setJournalEntries(prev => [newEntry, ...prev]);
+    navigateTo('journal');
   };
 
   const renderDetails = () => {
     if (!selectedDate) return null;
 
-    const activeTasks = todos.filter(t => !t.archived && t.dueDate === selectedDate);
-    const achievedTasks = todos.filter(t => t.archived && t.completedAt?.startsWith(selectedDate));
+    const activeTasks = todos.filter(t => !t.archived && isTaskActiveOnDate(t, selectedDate));
     const journalEntry = journalEntries.find(j => j.date === selectedDate);
-    const formattedDate = new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const formattedDate = formatLocalDate(selectedDate, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     return (
       <div className="fixed inset-0 z-[60] flex justify-end bg-gray-900/20 backdrop-blur-sm transition-all duration-500" onClick={() => setSelectedDate(null)}>
         <div className="w-full max-w-md glass-panel h-full shadow-2xl border-l border-white/20 p-8 overflow-y-auto animate-slide-in-right m-2 sm:m-4 rounded-[2.5rem]" onClick={e => e.stopPropagation()}>
+          
           <div className="flex items-center justify-between mb-10">
              <h3 className="text-2xl font-bold font-display text-gray-900 dark:text-white leading-tight">{formattedDate}</h3>
              <button onClick={() => setSelectedDate(null)} className="relative overflow-hidden p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-gray-500 transition-colors">
@@ -150,13 +173,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
               </div>
             ) : (
               <div className="text-center p-6 bg-gray-50/40 dark:bg-gray-800/40 rounded-[2rem] border border-dashed border-gray-300 dark:border-gray-700">
-                <p className="text-gray-500 text-sm mb-4">No entry recorded.</p>
+                <p className="text-gray-500 text-sm mb-4">No journal entry recorded for this day.</p>
                 <button 
-                  onClick={() => navigateTo('journal')}
-                  className="relative overflow-hidden inline-flex items-center px-5 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full text-sm font-bold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 transition-all"
+                  onClick={handleWriteJournal}
+                  className="relative overflow-hidden inline-flex items-center px-5 py-2.5 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200/50 dark:border-gray-700 rounded-full text-sm font-bold shadow-sm transition-all"
                 >
                    <Ripple />
-                   <Plus size={16} className="mr-2" /> Write Entry
+                   <Plus size={16} className="mr-2 text-purple-500" /> Write Entry
                 </button>
               </div>
             )}
@@ -166,64 +189,48 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
           <div className="mb-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center px-2">
               <Circle size={14} className="mr-2 text-brand-500" />
-              Tasks Due
+              Goals & Routines
             </h4>
             <div className="space-y-3">
               {activeTasks.length === 0 ? (
-                <p className="text-sm text-gray-400 italic px-2">No active tasks scheduled.</p>
+                <p className="text-sm text-gray-400 italic px-2">No active tasks or routines scheduled.</p>
               ) : (
-                activeTasks.map(task => (
-                  <div key={task.id} className="relative overflow-hidden flex items-center p-4 rounded-[2rem] glass-card shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02]">
-                    {/* Just visual decoration ripple on the card */}
-                    <Ripple className="bg-gray-400/10" />
-                    <button 
-                      onClick={() => toggleTask(task.id)}
-                      className={`relative overflow-hidden rounded-full flex-shrink-0 mr-4 ${task.completed ? 'text-green-500' : 'text-gray-300 hover:text-brand-500'}`}
-                    >
-                      <Ripple className="bg-gray-500/20" />
-                      {task.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
-                    </button>
-                    <div className="min-w-0 pointer-events-none">
-                       <p className={`text-base font-medium truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}>{task.title}</p>
+                activeTasks.map(task => {
+                  const completed = isTaskCompletedOnDate(task, selectedDate);
+                  return (
+                    <div key={task.id} className="relative overflow-hidden flex items-center p-4 rounded-[2rem] glass-card shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02]">
+                      <Ripple className="bg-gray-400/10" />
+                      <button 
+                        onClick={() => toggleTask(task)}
+                        className={`relative overflow-hidden rounded-full flex-shrink-0 mr-4 ${completed ? 'text-green-500' : 'text-gray-300 hover:text-brand-500'}`}
+                      >
+                        <Ripple className="bg-gray-500/20" />
+                        {completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                      </button>
+                      <div className="min-w-0 pointer-events-none">
+                         <p className={`text-base font-semibold truncate ${completed ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}>{task.title}</p>
+                         {task.time && <p className="text-[10px] text-brand-500 font-bold">⏰ {task.time}</p>}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Achievements Section */}
-          <div className="animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center px-2">
-              <Trophy size={14} className="mr-2 text-amber-500" />
-              Achievements
-            </h4>
-             <div className="space-y-2">
-              {achievedTasks.length === 0 ? (
-                <p className="text-sm text-gray-400 italic px-2">No tasks completed on this day.</p>
-              ) : (
-                achievedTasks.map(task => (
-                  <div key={task.id} className="flex items-center px-4 py-3 rounded-full bg-amber-50/50 dark:bg-amber-900/20 border border-amber-100/50 dark:border-amber-900/30 backdrop-blur-sm">
-                     <CheckCircle2 size={18} className="text-amber-500 mr-3" />
-                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">{task.title}</span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
 
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <div className="space-y-6 animate-fade-in-up pb-20">
        <div className="flex items-center justify-between px-2">
          <div>
             <h1 className="text-4xl font-bold font-display text-gray-900 dark:text-white">Calendar</h1>
-            <p className="text-gray-500 font-light text-lg mt-1">Your life in a snapshot.</p>
+            <p className="text-gray-500 font-light text-lg mt-1">Holistic view of all dynamic routines and memories.</p>
          </div>
+         
          <div className="flex items-center glass-panel rounded-full shadow-sm p-1.5">
            <button onClick={() => handleMonthChange(-1)} className="relative overflow-hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300 transition-colors">
              <Ripple />
