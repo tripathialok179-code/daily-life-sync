@@ -5,7 +5,8 @@ import JournalView from './components/JournalView';
 import ListsView from './components/ListsView';
 import SettingsView from './components/SettingsView';
 import CalendarView from './components/CalendarView';
-import { AppView, ThemeMode, ThemeColor, TodoItem, JournalEntry, CustomList } from './types';
+import { AppView, ThemeMode, ThemeColor, TodoItem, JournalEntry, CustomList, migrateTodos } from './types';
+import { Bell } from 'lucide-react';
 
 // RGB values for themes
 const THEME_COLORS: Record<ThemeColor, Record<string, string>> = {
@@ -34,8 +35,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<ThemeMode>('system');
   const [themeColor, setThemeColor] = useState<ThemeColor>('blue');
   
-  // --- FIX: Initialize Sidebar State based on Screen Size ---
-  // This prevents the "ghost menu" glitch by starting closed on mobile
   const [isSidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024; // Desktop = Open, Mobile = Closed
@@ -43,10 +42,40 @@ const App: React.FC = () => {
     return false;
   });
 
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  useEffect(() => {
+    const prompted = localStorage.getItem('ls_notif_prompted');
+    if (!prompted) {
+      const timer = setTimeout(() => {
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
+          setShowNotifPrompt(true);
+        }
+      }, 3000); // Trigger prompt on mount after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleAllowNotifications = async () => {
+    localStorage.setItem('ls_notif_prompted', 'true');
+    setShowNotifPrompt(false);
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        alert("Alert notification settings enabled successfully! 🔔");
+      }
+    }
+  };
+
+  const handleDismissNotifications = () => {
+    localStorage.setItem('ls_notif_prompted', 'true');
+    setShowNotifPrompt(false);
+  };
+
   // Data State
   const [todos, setTodos] = useState<TodoItem[]>(() => {
     const saved = localStorage.getItem('ls_todos');
-    return saved ? JSON.parse(saved) : [];
+    return saved ? migrateTodos(JSON.parse(saved)) : [];
   });
   
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => {
@@ -119,7 +148,7 @@ const App: React.FC = () => {
       isSidebarOpen={isSidebarOpen}
       onSidebarChange={setSidebarOpen}
     >
-      {currentView === 'todo' && <TodoView todos={todos} setTodos={setTodos} />}
+      {currentView === 'todo' && <TodoView todos={todos} setTodos={setTodos} journalEntries={journalEntries} />}
       {currentView === 'journal' && <JournalView entries={journalEntries} setEntries={setJournalEntries} />}
       {currentView === 'lists' && <ListsView lists={customLists} setLists={setCustomLists} />}
       {currentView === 'calendar' && (
@@ -127,6 +156,7 @@ const App: React.FC = () => {
           todos={todos} 
           journalEntries={journalEntries} 
           setTodos={setTodos}
+          setJournalEntries={setJournalEntries}
           navigateTo={setCurrentView}
         />
       )}
@@ -138,6 +168,35 @@ const App: React.FC = () => {
           setThemeColor={setThemeColor}
           clearData={handleClearData}
         />
+      )}
+      {showNotifPrompt && (
+        <div className="fixed bottom-6 left-6 z-[100] glass-panel p-6 rounded-[2rem] shadow-2xl animate-slide-in-left max-w-sm border border-brand-500/20 bg-gradient-to-tr from-brand-50/50 to-transparent dark:from-brand-950/20">
+          <div className="flex gap-4">
+            <div className="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-500/30 shrink-0">
+              <Bell size={24} className="animate-bounce" />
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-900 dark:text-white font-display text-base">Enable Reminders?</h4>
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 leading-relaxed">
+                Get push notifications for your daily tasks, habits, and streak reminders!
+              </p>
+              <div className="flex gap-2 mt-4">
+                <button 
+                  onClick={handleAllowNotifications}
+                  className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                >
+                  Enable
+                </button>
+                <button 
+                  onClick={handleDismissNotifications}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl text-xs font-bold transition-all"
+                >
+                  Maybe Later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </Layout>
   );

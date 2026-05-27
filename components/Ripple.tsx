@@ -1,5 +1,4 @@
-
-import React, { useState, useLayoutEffect, useRef, useEffect } from 'react';
+import React, { useState, useLayoutEffect, useRef } from 'react';
 
 interface RippleProps {
   className?: string;
@@ -13,8 +12,6 @@ const Ripple: React.FC<RippleProps> = ({ className = 'bg-current/20' }) => {
     const parent = ref.current?.parentElement;
     if (!parent) return;
 
-    // Helper to force relative positioning on parent if static, 
-    // but we assume parent has relative class mostly.
     const style = window.getComputedStyle(parent);
     if (style.position === 'static') {
       parent.style.position = 'relative';
@@ -27,7 +24,7 @@ const Ripple: React.FC<RippleProps> = ({ className = 'bg-current/20' }) => {
       const size = Math.max(rect.width, rect.height) * 2;
       const x = e.clientX - rect.left - size / 2;
       const y = e.clientY - rect.top - size / 2;
-      const id = Date.now();
+      const id = performance.now();
 
       setRipples(prev => [...prev, { x, y, size, id }]);
     };
@@ -35,13 +32,6 @@ const Ripple: React.FC<RippleProps> = ({ className = 'bg-current/20' }) => {
     parent.addEventListener('mousedown', handleMouseDown);
     return () => parent.removeEventListener('mousedown', handleMouseDown);
   }, []);
-
-  useEffect(() => {
-    const timeouts = ripples.map(r => 
-      setTimeout(() => setRipples(prev => prev.filter(item => item.id !== r.id)), 600)
-    );
-    return () => timeouts.forEach(clearTimeout);
-  }, [ripples]);
 
   return (
     <div ref={ref} className="absolute inset-0 pointer-events-none rounded-[inherit] overflow-hidden z-0">
@@ -54,6 +44,9 @@ const Ripple: React.FC<RippleProps> = ({ className = 'bg-current/20' }) => {
             left: r.x,
             width: r.size,
             height: r.size,
+          }}
+          onAnimationEnd={() => {
+            setRipples(prev => prev.filter(item => item.id !== r.id));
           }}
         />
       ))}

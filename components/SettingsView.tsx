@@ -1,7 +1,6 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { ThemeMode, ThemeColor } from '../types';
-import { Monitor, Moon, Sun, Trash2, Check, Palette } from 'lucide-react';
+import { Monitor, Moon, Sun, Trash2, Check, Palette, Bell } from 'lucide-react';
 import Ripple from './Ripple';
 
 interface SettingsViewProps {
@@ -13,6 +12,27 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor, setThemeColor, clearData }) => {
+  const [notifPermission, setNotifPermission] = useState<string>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'default';
+  });
+
+  const handleRequestPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      setNotifPermission(permission);
+      if (permission === 'granted') {
+        alert("System notifications enabled successfully! 🔔");
+      } else if (permission === 'denied') {
+        alert("Notifications blocked. If you are on a mobile device, please navigate to your Phone Settings -> Apps -> Daily Life Sync -> Notifications and enable them manually!");
+      }
+    } else {
+      alert("System notifications are not supported on this platform/device.");
+    }
+  };
+
   const ThemeOption = ({ mode, icon: Icon, label }: { mode: ThemeMode, icon: any, label: string }) => (
     <button
       onClick={() => setTheme(mode)}
@@ -72,6 +92,45 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
               <ColorOption color="slate" bgClass="bg-slate-500 shadow-lg shadow-slate-500/30" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Notifications */}
+      <div className="glass-panel p-8 rounded-[2.5rem] shadow-sm">
+        <h2 className="text-xl font-bold font-display mb-4 dark:text-white flex items-center">
+          <Bell className="mr-2 text-brand-500" size={24} /> Reminders & Notifications
+        </h2>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+          Enable system alerts and push reminders to get notified when tasks are due. This helps keep your daily routines synchronized and builds consistent Streaks.
+        </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50 dark:bg-gray-800/20 p-5 rounded-2xl">
+          <div>
+            <p className="font-bold text-sm text-gray-800 dark:text-white">Push Reminders Status</p>
+            <p className="text-xs text-gray-450 mt-1">
+              {notifPermission === 'granted' 
+                ? '🔔 Reminders are successfully configured.' 
+                : notifPermission === 'denied' 
+                ? '🚫 Blocked in system settings. Enable manually in your phone Settings.' 
+                : 'Configure device permissions to receive alerts.'
+              }
+            </p>
+          </div>
+          <button 
+            onClick={handleRequestPermission}
+            disabled={notifPermission === 'granted'}
+            className={`relative overflow-hidden flex items-center justify-center px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${
+              notifPermission === 'granted'
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 cursor-default border border-emerald-200/20'
+                : 'bg-brand-500 hover:bg-brand-600 text-white shadow-brand-500/20'
+            }`}
+          >
+            <Ripple />
+            {notifPermission === 'granted' ? (
+              <span className="flex items-center"><Check size={16} className="mr-1.5" /> Enabled</span>
+            ) : (
+              'Enable Notifications'
+            )}
+          </button>
         </div>
       </div>
 
