@@ -4,6 +4,8 @@
 
 # Daily Life Sync
 
+This project is fully designed and developed in collaboration with AI, showcasing the advanced pair-programming capabilities of AI agents in building comprehensive, production-grade applications.
+
 Welcome to **Daily Life Sync** – a premium, modern, and high-performance productivity application designed to seamlessly organize and synchronize your daily activities. 
 
 ## Features
