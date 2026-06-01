@@ -8,13 +8,14 @@
     "preview": "vite preview",
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "make-installer": "npm run build && electron-builder --win nsis"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
-
+    "@capacitor/local-notifications": "^7.0.6",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
@@ -33,6 +34,7 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "^39.2.3",
+    "electron-builder": "^26.8.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   },
@@ -40,5 +42,33 @@
   "main": "main.js",
   "keywords": [],
   "author": "Alok",
-  "license": "ISC"
+  "license": "ISC",
+  "build": {
+    "appId": "com.Alok.dailylife",
+    "productName": "Daily Life Sync",
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Daily Life Sync",
+      "uninstallDisplayName": "Daily Life Sync",
+      "runAfterFinish": true
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "asar": true,
+    "directories": {
+      "output": "dist-electron"
+    }
+  }
 }
