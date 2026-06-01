@@ -329,12 +329,12 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
                         {todo.title}
                       </h3>
                       {todo.time && (
-                        <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider text-brand-500 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded-full animate-pulse-slow">
+                        <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-brand-500 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded-full animate-pulse-slow">
                           ⏰ {todo.time}
                         </span>
                       )}
                       {todo.recurrence !== 'none' && (
-                        <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider text-purple-500 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
+                        <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-purple-500 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
                           🔄 {todo.recurrence === 'none' ? 'Single' : `${todo.recurrence} task`}
                         </span>
                       )}

@@ -12,15 +12,44 @@ interface SettingsViewProps {
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor, setThemeColor, clearData }) => {
-  const [notifPermission, setNotifPermission] = useState<string>(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission;
-    }
-    return 'default';
-  });
+  const [notifPermission, setNotifPermission] = useState<string>('default');
+
+  React.useEffect(() => {
+    const checkPermissionState = async () => {
+      if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
+        try {
+          const { LocalNotifications } = await import('@capacitor/local-notifications');
+          const status = await LocalNotifications.checkPermissions();
+          setNotifPermission(status.receive);
+        } catch (e) {
+          console.error("Capacitor check permissions error:", e);
+        }
+      } else if (typeof window !== 'undefined' && 'Notification' in window) {
+        setNotifPermission(Notification.permission);
+      }
+    };
+    checkPermissionState();
+  }, []);
 
   const handleRequestPermission = async () => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        let status = await LocalNotifications.checkPermissions();
+        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+          status = await LocalNotifications.requestPermissions();
+        }
+        setNotifPermission(status.receive);
+        if (status.receive === 'granted') {
+          alert("System notifications enabled successfully! 🔔");
+        } else {
+          alert("Notifications blocked. Please navigate to your Phone Settings -> Apps -> Daily Life Sync -> Notifications and enable them manually!");
+        }
+      } catch (e) {
+        console.error("Capacitor request permission error:", e);
+        alert("Failed to request system notification permissions on this device.");
+      }
+    } else if (typeof window !== 'undefined' && 'Notification' in window) {
       const permission = await Notification.requestPermission();
       setNotifPermission(permission);
       if (permission === 'granted') {
