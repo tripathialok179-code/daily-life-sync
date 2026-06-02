@@ -35,8 +35,9 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
       return granted;
     }
     return true;
-  } catch (e) {
+  } catch (e: any) {
     console.warn("Failed to request notification permissions:", e);
+    alert(`Notification Error: ${JSON.stringify(e.message || e)}`);
     return false;
   }
 };
@@ -74,14 +75,14 @@ export const scheduleReminder = async (id: number, title: string, body: string, 
           title,
           body,
           schedule: { at: date, allowWhileIdle: true },
-          channelId: 'daily-life-tasks-v1',
-          smallIcon: 'ic_launcher_round'
+          channelId: 'daily-life-tasks-v1'
         }
       ]
     });
     console.log(`[NotificationService] Scheduled native notification ${id} for ${date.toISOString()}`);
-  } catch (e) {
+  } catch (e: any) {
     console.error(`[NotificationService] Failed to schedule reminder ${id}:`, e);
+    alert(`Notification Error: ${JSON.stringify(e.message || e)}`);
   }
 };
 
@@ -95,7 +96,8 @@ export const cancelReminder = async (id: number) => {
       notifications: [{ id }]
     });
     console.log(`[NotificationService] Cancelled native notification ${id}`);
-  } catch (e) {
+  } catch (e: any) {
     console.error(`[NotificationService] Failed to cancel reminder ${id}:`, e);
+    alert(`Notification Error: ${JSON.stringify(e.message || e)}`);
   }
 };

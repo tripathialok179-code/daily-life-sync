@@ -31,6 +31,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
     checkPermissionState();
   }, []);
 
+  const triggerTest = async () => {
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+      await LocalNotifications.schedule({
+        notifications: [{
+          title: "Test Successful! 🎉",
+          body: "The native notification bridge is working perfectly.",
+          id: 999999,
+          channelId: 'daily-life-tasks-v1' 
+        }]
+      });
+      alert("Test fired! Check your notification tray.");
+    } catch (e: any) {
+      alert(`Test Failed: ${e.message || JSON.stringify(e)}`);
+    }
+  };
+
   const handleRequestPermission = async () => {
     if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
       try {
@@ -144,22 +161,33 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
               }
             </p>
           </div>
-          <button 
-            onClick={handleRequestPermission}
-            disabled={notifPermission === 'granted'}
-            className={`relative overflow-hidden flex items-center justify-center px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${
-              notifPermission === 'granted'
-                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 cursor-default border border-emerald-200/20'
-                : 'bg-brand-500 hover:bg-brand-600 text-white shadow-brand-500/20'
-            }`}
-          >
-            <Ripple />
-            {notifPermission === 'granted' ? (
-              <span className="flex items-center"><Check size={16} className="mr-1.5" /> Enabled</span>
-            ) : (
-              'Enable Notifications'
+          <div className="flex gap-2">
+            {notifPermission === 'granted' && (
+              <button 
+                onClick={triggerTest}
+                className="relative overflow-hidden flex items-center justify-center px-4 py-3 rounded-xl font-bold text-sm bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm transition-all"
+              >
+                <Ripple />
+                Test
+              </button>
             )}
-          </button>
+            <button 
+              onClick={handleRequestPermission}
+              disabled={notifPermission === 'granted'}
+              className={`relative overflow-hidden flex items-center justify-center px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${
+                notifPermission === 'granted'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 cursor-default border border-emerald-200/20'
+                  : 'bg-brand-500 hover:bg-brand-600 text-white shadow-brand-500/20'
+              }`}
+            >
+              <Ripple />
+              {notifPermission === 'granted' ? (
+                <span className="flex items-center"><Check size={16} className="mr-1.5" /> Enabled</span>
+              ) : (
+                'Enable Notifications'
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
