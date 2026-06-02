@@ -10,9 +10,10 @@ export const stringToNumericId = (str: string): number => {
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash | 0; // Strict 32-bit signed integer conversion
   }
-  return Math.abs(hash) % 2147483647; // Ensure positive within 32-bit limit
+  const finalId = Math.abs(hash) % 2147483647;
+  return finalId === 0 ? 1 : finalId; // Guarantee strictly > 0 and < max 32-bit
 };
 
 /**
@@ -24,7 +25,14 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
     const status = await LocalNotifications.checkPermissions();
     if (status.display !== 'granted') {
       const request = await LocalNotifications.requestPermissions();
-      return request.display === 'granted';
+      const granted = request.display === 'granted';
+      if (granted) {
+        // Immediate 5-second test notification
+        const testDate = new Date();
+        testDate.setSeconds(testDate.getSeconds() + 5);
+        scheduleReminder(999999999, "Permissions Working!", "Native alarm successfully registered.", testDate);
+      }
+      return granted;
     }
     return true;
   } catch (e) {
@@ -39,15 +47,19 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
 export const scheduleReminder = async (id: number, title: string, body: string, date: Date) => {
   if (!Capacitor.isNativePlatform()) return;
   
+  const now = new Date();
+  console.log(`[Safety Log] Native scheduling calculation: Current Time: ${now.toISOString()} | Target Time: ${date.toISOString()}`);
+  
   // Do not schedule if the date is in the past
-  if (date.getTime() <= new Date().getTime()) {
+  if (date.getTime() <= now.getTime()) {
+      console.warn(`[Safety Log] Dropped native notification ${id} because it evaluates to the past.`);
       return;
   }
 
   try {
-    // Android 13+ requirement: Channels
+    // Rotate channel ID to bypass OS permanent caching of old configurations
     await LocalNotifications.createChannel({
-      id: 'reminders',
+      id: 'daily-life-tasks-v1',
       name: 'Reminders',
       description: 'High priority task reminders',
       importance: 5,
@@ -62,7 +74,7 @@ export const scheduleReminder = async (id: number, title: string, body: string, 
           title,
           body,
           schedule: { at: date, allowWhileIdle: true },
-          channelId: 'reminders',
+          channelId: 'daily-life-tasks-v1',
           smallIcon: 'ic_launcher_round'
         }
       ]
