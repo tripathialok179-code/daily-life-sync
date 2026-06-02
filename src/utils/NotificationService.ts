@@ -22,9 +22,9 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
   if (!Capacitor.isNativePlatform()) return false;
   try {
     const status = await LocalNotifications.checkPermissions();
-    if (status.display !== 'granted' || status.receive !== 'granted') {
+    if (status.display !== 'granted') {
       const request = await LocalNotifications.requestPermissions();
-      return request.display === 'granted' && request.receive === 'granted';
+      return request.display === 'granted';
     }
     return true;
   } catch (e) {
@@ -62,7 +62,8 @@ export const scheduleReminder = async (id: number, title: string, body: string, 
           title,
           body,
           schedule: { at: date, allowWhileIdle: true },
-          channelId: 'reminders'
+          channelId: 'reminders',
+          smallIcon: 'ic_launcher_round'
         }
       ]
     });
