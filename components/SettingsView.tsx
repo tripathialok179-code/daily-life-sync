@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ThemeMode, ThemeColor } from '../types';
-import { Monitor, Moon, Sun, Trash2, Check, Palette, Bell } from 'lucide-react';
+import { Monitor, Moon, Sun, Trash2, Check, Palette, Bell, Stethoscope } from 'lucide-react';
 import Ripple from './Ripple';
 
 interface SettingsViewProps {
@@ -20,7 +20,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
         try {
           const { LocalNotifications } = await import('@capacitor/local-notifications');
           const status = await LocalNotifications.checkPermissions();
-          setNotifPermission(status.receive);
+          // FIXED: Check display
+          setNotifPermission(status.display);
         } catch (e) {
           console.error("Capacitor check permissions error:", e);
         }
@@ -31,34 +32,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
     checkPermissionState();
   }, []);
 
-  const triggerTest = async () => {
-    try {
-      const { LocalNotifications } = await import('@capacitor/local-notifications');
-      await LocalNotifications.schedule({
-        notifications: [{
-          title: "Test Successful! 🎉",
-          body: "The native notification bridge is working perfectly.",
-          id: 999999,
-          channelId: 'daily-life-tasks-v1' 
-        }]
-      });
-      alert("Test fired! Check your notification tray.");
-    } catch (e: any) {
-      alert(`Test Failed: ${e.message || JSON.stringify(e)}`);
-    }
-  };
-
   const handleRequestPermission = async () => {
     if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         let status = await LocalNotifications.checkPermissions();
-        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+        // FIXED: Check display
+        if (status.display === 'prompt' || status.display === 'prompt-with-rationale') {
           status = await LocalNotifications.requestPermissions();
         }
-        setNotifPermission(status.receive);
-        if (status.receive === 'granted') {
-          alert("System notifications enabled successfully! 🔔");
+        setNotifPermission(status.display);
+        if (status.display === 'granted') {
+          alert("System notifications enabled successfully! 🎉");
         } else {
           alert("Notifications blocked. Please navigate to your Phone Settings -> Apps -> Daily Life Sync -> Notifications and enable them manually!");
         }
@@ -70,7 +55,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
       const permission = await Notification.requestPermission();
       setNotifPermission(permission);
       if (permission === 'granted') {
-        alert("System notifications enabled successfully! 🔔");
+        alert("System notifications enabled successfully! 🎉");
       } else if (permission === 'denied') {
         alert("Notifications blocked. If you are on a mobile device, please navigate to your Phone Settings -> Apps -> Daily Life Sync -> Notifications and enable them manually!");
       }
@@ -79,14 +64,35 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
     }
   };
 
+  const triggerTestNotification = async () => {
+    if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        await LocalNotifications.schedule({
+          notifications: [{
+            title: "Test Successful! 🎉",
+            body: "Your native Android notifications are working perfectly.",
+            id: 99999,
+            schedule: { at: new Date(Date.now() + 3000) }, // 3 seconds from now
+            channelId: 'daily-life-sync'
+          }]
+        });
+        alert("Notification scheduled! Exit to your home screen within 3 seconds to see it.");
+      } catch (e: any) {
+        alert(`Test failed: ${e.message || JSON.stringify(e)}`);
+      }
+    } else {
+      alert("This test button only works when the app is running on an Android device.");
+    }
+  };
+
   const ThemeOption = ({ mode, icon: Icon, label }: { mode: ThemeMode, icon: any, label: string }) => (
     <button
       onClick={() => setTheme(mode)}
-      className={`relative overflow-hidden flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 ${
-        theme === mode 
-          ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 shadow-sm' 
+      className={`relative overflow-hidden flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 ${theme === mode
+          ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 shadow-sm'
           : 'border-transparent bg-white/40 dark:bg-gray-800/40 text-gray-500 hover:bg-white/60 dark:hover:bg-gray-800/60'
-      }`}
+        }`}
     >
       <Ripple className={theme === mode ? 'bg-brand-500/20' : 'bg-gray-400/20'} />
       <Icon size={28} className="mb-3" strokeWidth={1.5} />
@@ -97,9 +103,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
   const ColorOption = ({ color, bgClass }: { color: ThemeColor, bgClass: string }) => (
     <button
       onClick={() => setThemeColor(color)}
-      className={`relative overflow-hidden w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${bgClass} ${
-        themeColor === color ? 'ring-4 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-900 ring-gray-200 dark:ring-gray-700 scale-110' : 'hover:scale-105'
-      }`}
+      className={`relative overflow-hidden w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${bgClass} ${themeColor === color ? 'ring-4 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-900 ring-gray-200 dark:ring-gray-700 scale-110' : 'hover:scale-105'
+        }`}
     >
       <Ripple className="bg-white/40" />
       {themeColor === color && <Check className="text-white w-5 h-5" strokeWidth={3} />}
@@ -118,7 +123,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
       {/* Appearance */}
       <div className="glass-panel p-8 rounded-[2.5rem] shadow-sm">
         <h2 className="text-xl font-bold font-display mb-6 dark:text-white flex items-center">
-          <Palette className="mr-2 text-brand-500" size={24}/> Appearance
+          <Palette className="mr-2 text-brand-500" size={24} /> Appearance
         </h2>
         <div className="space-y-8">
           <div className="grid grid-cols-3 gap-4">
@@ -126,7 +131,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
             <ThemeOption mode="dark" icon={Moon} label="Dark" />
             <ThemeOption mode="system" icon={Monitor} label="System" />
           </div>
-          
+
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Accent Color</label>
             <div className="flex flex-wrap gap-4 justify-center sm:justify-start">
@@ -153,42 +158,47 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
           <div>
             <p className="font-bold text-sm text-gray-800 dark:text-white">Push Reminders Status</p>
             <p className="text-xs text-gray-450 mt-1">
-              {notifPermission === 'granted' 
-                ? '🔔 Reminders are successfully configured.' 
-                : notifPermission === 'denied' 
-                ? '🚫 Blocked in system settings. Enable manually in your phone Settings.' 
-                : 'Configure device permissions to receive alerts.'
+              {notifPermission === 'granted'
+                ? '🎉 Reminders are successfully configured.'
+                : notifPermission === 'denied'
+                  ? '🚫 Blocked in system settings. Enable manually in your phone Settings.'
+                  : 'Configure device permissions to receive alerts.'
               }
             </p>
           </div>
-          <div className="flex gap-2">
-            {notifPermission === 'granted' && (
-              <button 
-                onClick={triggerTest}
-                className="relative overflow-hidden flex items-center justify-center px-4 py-3 rounded-xl font-bold text-sm bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm transition-all"
-              >
-                <Ripple />
-                Test
-              </button>
-            )}
-            <button 
-              onClick={handleRequestPermission}
-              disabled={notifPermission === 'granted'}
-              className={`relative overflow-hidden flex items-center justify-center px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${
-                notifPermission === 'granted'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 cursor-default border border-emerald-200/20'
-                  : 'bg-brand-500 hover:bg-brand-600 text-white shadow-brand-500/20'
+          <button
+            onClick={handleRequestPermission}
+            disabled={notifPermission === 'granted'}
+            className={`relative overflow-hidden flex items-center justify-center px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${notifPermission === 'granted'
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 cursor-default border border-emerald-200/20'
+                : 'bg-brand-500 hover:bg-brand-600 text-white shadow-brand-500/20'
               }`}
-            >
-              <Ripple />
-              {notifPermission === 'granted' ? (
-                <span className="flex items-center"><Check size={16} className="mr-1.5" /> Enabled</span>
-              ) : (
-                'Enable Notifications'
-              )}
-            </button>
-          </div>
+          >
+            <Ripple />
+            {notifPermission === 'granted' ? (
+              <span className="flex items-center"><Check size={16} className="mr-1.5" /> Enabled</span>
+            ) : (
+              'Enable Notifications'
+            )}
+          </button>
         </div>
+      </div>
+
+      {/* Diagnostic Zone */}
+      <div className="glass-panel p-8 rounded-[2.5rem] shadow-sm">
+        <h2 className="text-xl font-bold font-display mb-4 dark:text-white flex items-center">
+          <Stethoscope className="mr-2 text-brand-500" size={24} /> Diagnostics
+        </h2>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+          Use this button to manually trigger a test notification in the background to ensure your phone is receiving them.
+        </p>
+        <button
+          onClick={triggerTestNotification}
+          className="relative overflow-hidden w-full flex items-center justify-center px-6 py-3 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/20 dark:hover:bg-brand-900/40 text-brand-600 dark:text-brand-400 rounded-xl font-medium transition-colors"
+        >
+          <Ripple className="bg-brand-500/20" />
+          Trigger Test Notification
+        </button>
       </div>
 
       {/* Data Management */}
@@ -199,11 +209,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
         <p className="text-sm text-gray-500 mb-6 leading-relaxed">
           This will delete all local data including tasks, journal entries, and lists. This action takes place immediately and cannot be undone.
         </p>
-        <button 
+        <button
           onClick={() => {
-             if(window.confirm("Are you absolutely sure you want to delete all data?")) {
-               clearData();
-             }
+            if (window.confirm("Are you absolutely sure you want to delete all data?")) {
+              clearData();
+            }
           }}
           className="relative overflow-hidden w-full sm:w-auto flex items-center justify-center px-6 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-xl font-medium transition-colors"
         >
@@ -211,7 +221,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
           Clear All Data
         </button>
       </div>
-      
+
       <div className="text-center py-8">
         <p className="text-xs font-mono text-gray-400 uppercase tracking-widest">Daily Life Sync v1.2.0</p>
       </div>
