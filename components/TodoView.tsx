@@ -3,7 +3,7 @@ import { TodoItem, Timeframe, getLocalTodayString, formatLocalDate, isTaskActive
 import { Plus, Trash2, Calendar, CheckCircle2, Circle, Trophy, ArrowRight, X as XIcon, RefreshCw, Flame, BarChart2, Check, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Ripple from './Ripple';
-import { scheduleReminder, cancelReminder, stringToNumericId } from '../utils/NotificationService';
+import { scheduleReminder, cancelReminder, generateNumericId } from '../utils/NotificationService';
 
 interface TodoViewProps {
   todos: TodoItem[];
@@ -188,11 +188,14 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
 
     setTodos(prev => [...prev, todo]);
     
-    if (todo.time) {
+    // Schedule local notification if time is provided
+    if (todo.time && todo.dueDate) {
       const [hours, minutes] = todo.time.split(':').map(Number);
-      const scheduleDate = new Date(todo.dueDate);
-      scheduleDate.setHours(hours, minutes, 0, 0);
-      scheduleReminder(stringToNumericId(todo.id), todo.title, todo.description || 'Task reminder!', scheduleDate);
+      const scheduleTime = new Date(todo.dueDate);
+      scheduleTime.setHours(hours, minutes, 0, 0);
+      if (scheduleTime > new Date()) {
+        scheduleReminder(generateNumericId(todo.id), todo.title, todo.description || 'Task is due!', scheduleTime);
+      }
     }
 
     setIsModalOpen(false);
@@ -209,6 +212,9 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
   const handleToggleComplete = (todo: TodoItem, dateStr: string) => {
     if (todo.recurrence === 'none') {
       const nextStatus = !todo.completed;
+      if (nextStatus) {
+        cancelReminder(generateNumericId(todo.id));
+      }
       setTodos(prev => prev.map(t => {
         if (t.id === todo.id) {
           return { ...t, completed: nextStatus, completedAt: nextStatus ? new Date().toISOString() : undefined };
@@ -216,7 +222,6 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
         return t;
       }));
       if (nextStatus) {
-        cancelReminder(stringToNumericId(todo.id));
         setCelebration({ title: todo.title, todo });
       }
     } else {
@@ -233,7 +238,6 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
         return t;
       }));
       if (!alreadyCompleted) {
-        cancelReminder(stringToNumericId(todo.id));
         setCelebration({ title: todo.title, todo });
       }
     }
@@ -245,7 +249,7 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
   };
 
   const handleDelete = (id: string) => {
-    cancelReminder(stringToNumericId(id));
+    cancelReminder(generateNumericId(id));
     setTodos(prev => prev.filter(t => t.id !== id));
   };
 
