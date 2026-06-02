@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { TodoItem, JournalEntry, AppView, isTaskActiveOnDate, isTaskCompletedOnDate, getLocalTodayString, formatLocalDate } from '../types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, BookOpen, CheckCircle2, Circle, Trophy, ArrowRight, Plus, X } from 'lucide-react';
 import Ripple from './Ripple';
-import { scheduleReminder, cancelReminder, stringToNumericId } from '../utils/NotificationService';
+import { scheduleReminder, cancelReminder, generateNumericId } from '../utils/NotificationService';
 
 interface CalendarViewProps {
   todos: TodoItem[];
@@ -23,22 +23,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
     const firstDay = new Date(year, month, 1).getDay();
     return { days, firstDay };
   };
-
-  // Schedule 15-minute advance reminders for tasks on the currently viewed date
-  useEffect(() => {
-    if (selectedDate) {
-      const activeTasks = todos.filter(t => !t.archived && isTaskActiveOnDate(t, selectedDate) && t.time && !isTaskCompletedOnDate(t, selectedDate));
-      activeTasks.forEach(task => {
-        const [hours, minutes] = task.time!.split(':').map(Number);
-        const scheduleDate = new Date(selectedDate);
-        scheduleDate.setHours(hours, minutes - 15, 0, 0);
-        
-        if (scheduleDate.getTime() > new Date().getTime()) {
-           scheduleReminder(stringToNumericId(task.id), `Upcoming: ${task.title}`, 'Starts in 15 minutes!', scheduleDate);
-        }
-      });
-    }
-  }, [selectedDate, todos]);
 
   const handleMonthChange = (increment: number) => {
     const newDate = new Date(currentDate);
@@ -116,7 +100,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
     if (!selectedDate) return;
     if (todo.recurrence === 'none') {
       const nextStatus = !todo.completed;
-      if (nextStatus) cancelReminder(stringToNumericId(todo.id));
+      if (nextStatus) {
+        cancelReminder(generateNumericId(todo.id));
+        cancelReminder(generateNumericId(todo.id + "_early"));
+      }
       setTodos(prev => prev.map(t => {
         if (t.id === todo.id) {
           return { ...t, completed: nextStatus, completedAt: nextStatus ? new Date().toISOString() : undefined };
@@ -125,10 +112,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
       }));
     } else {
       const completed = todo.completedDates || [];
-      const alreadyCompleted = completed.includes(selectedDate);
-      if (!alreadyCompleted) cancelReminder(stringToNumericId(todo.id));
-      
-      const nextCompleted = alreadyCompleted
+      const nextCompleted = completed.includes(selectedDate)
         ? completed.filter(d => d !== selectedDate)
         : [...completed, selectedDate];
 
@@ -155,6 +139,25 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
     setJournalEntries(prev => [newEntry, ...prev]);
     navigateTo('journal');
   };
+
+  // Schedule 15-minute early reminders for active tasks (acting as calendar events)
+  useEffect(() => {
+    todos.forEach(todo => {
+      if (!todo.archived && todo.time && todo.dueDate && !todo.completed) {
+        const [hours, minutes] = todo.time.split(':').map(Number);
+        const scheduleTime = new Date(todo.dueDate);
+        scheduleTime.setHours(hours, minutes, 0, 0);
+        
+        // 15 minutes before the event
+        const earlyReminderTime = new Date(scheduleTime.getTime() - 15 * 60000);
+        
+        if (earlyReminderTime > new Date()) {
+          const earlyId = generateNumericId(todo.id + "_early");
+          scheduleReminder(earlyId, `Upcoming: ${todo.title}`, `Starts in 15 minutes!`, earlyReminderTime);
+        }
+      }
+    });
+  }, [todos]);
 
   const renderDetails = () => {
     if (!selectedDate) return null;
