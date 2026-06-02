@@ -8,6 +8,7 @@ import CalendarView from './components/CalendarView';
 import { AppView, ThemeMode, ThemeColor, TodoItem, JournalEntry, CustomList, migrateTodos, getLocalTodayString, isTaskActiveOnDate, isTaskCompletedOnDate } from './types';
 import { Bell } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { requestNotificationPermissions } from './utils/NotificationService';
 
 // RGB values for themes
 const THEME_COLORS: Record<ThemeColor, Record<string, string>> = {
@@ -43,8 +44,6 @@ const App: React.FC = () => {
     return false;
   });
 
-  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
-
   // Data State
   const [todos, setTodos] = useState<TodoItem[]>(() => {
     const saved = localStorage.getItem('ls_todos');
@@ -61,115 +60,15 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Helper to synchronize local notifications for Capacitor Android
-  const syncCapacitorNotifications = async (todoList: TodoItem[]) => {
-    if (typeof window === 'undefined' || !Capacitor.isNativePlatform()) {
-      return;
-    }
-    try {
-      const { LocalNotifications } = await import('@capacitor/local-notifications');
-      let permission = await LocalNotifications.checkPermissions();
-      
-      if (permission.display !== 'granted' || permission.receive !== 'granted') {
-        permission = await LocalNotifications.requestPermissions();
-      }
+  // Centralized sync removed in favor of component-level NotificationService hook.
 
-      if (permission.display !== 'granted' || permission.receive !== 'granted') {
-        console.warn('Local notifications permission denied by user.');
-        return;
-      }
-
-      // Clear all pending notifications
-      const pending = await LocalNotifications.getPending();
-      if (pending.notifications.length > 0) {
-        await LocalNotifications.cancel(pending);
-      }
-
-      // Create Android 13+ Notification Channel to prevent OS blocking
-      await LocalNotifications.createChannel({
-        id: 'daily-life-sync',
-        name: 'Daily Life Sync Tasks',
-        description: 'Task and routine reminders',
-        importance: 5,
-        visibility: 1,
-        vibration: true
-      });
-
-      const notificationsToSchedule = [];
-      const now = new Date();
-      const tasksWithTime = todoList.filter(t => !t.archived && t.time);
-
-      // Schedule for the next 7 days
-      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-        const targetDate = new Date();
-        targetDate.setDate(now.getDate() + dayOffset);
-        const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-        
-        for (const task of tasksWithTime) {
-          if (isTaskActiveOnDate(task, dateStr) && !isTaskCompletedOnDate(task, dateStr)) {
-            const [hours, minutes] = task.time!.split(':').map(Number);
-            const scheduleTime = new Date(targetDate);
-            scheduleTime.setHours(hours, minutes, 0, 0);
-
-            if (scheduleTime > now) {
-              // Generate a unique integer ID from task.id string
-              let idHash = 0;
-              for (let i = 0; i < task.id.length; i++) {
-                idHash = (idHash << 5) - idHash + task.id.charCodeAt(i);
-                idHash |= 0;
-              }
-              const notifId = Math.abs(idHash + dayOffset) % 2147483647;
-
-              notificationsToSchedule.push({
-                title: task.title,
-                body: task.description || 'Routine reminder!',
-                id: notifId,
-                schedule: { at: scheduleTime, allowWhileIdle: true },
-                channelId: 'daily-life-sync',
-              });
-            }
-          }
-        }
-      }
-
-      if (notificationsToSchedule.length > 0) {
-        await LocalNotifications.schedule({
-          notifications: notificationsToSchedule.slice(0, 64)
-        });
-      }
-    } catch (e) {
-      console.error("Failed to sync local notifications:", e);
-    }
-  };
-
-  const sendSystemNotification = async (title: string, body: string) => {
-    if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
-      try {
-        const { LocalNotifications } = await import('@capacitor/local-notifications');
-        const granted = await LocalNotifications.checkPermissions();
-        if (granted.receive === 'granted') {
-          await LocalNotifications.schedule({
-            notifications: [
-              {
-                title,
-                body,
-                id: Math.floor(Math.random() * 1000000),
-              }
-            ]
-          });
-        }
-      } catch (e) {
-        console.error("Capacitor local notification trigger error:", e);
-      }
-    } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body });
-    }
-  };
-
-  // Synchronize Capacitor notifications on mobile whenever tasks change
+  // Initialize Native Permissions
   useEffect(() => {
-    syncCapacitorNotifications(todos);
+    requestNotificationPermissions();
+  }, []);
 
+  // Synchronize tasks
+  useEffect(() => {
     // Sync to Electron main process for deep-background notifications
     const electronRequire = (window as any).require;
     if (electronRequire) {
@@ -190,81 +89,7 @@ const App: React.FC = () => {
     }
   }, [todos]);
 
-  // Background interval check for active notifications (web / Electron / when app is open)
-  useEffect(() => {
-    const checkReminders = () => {
-      const todayStr = getLocalTodayString();
-      const now = new Date();
-      const currentHourMin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      
-      todos.forEach(todo => {
-        if (!todo.archived && isTaskActiveOnDate(todo, todayStr) && !isTaskCompletedOnDate(todo, todayStr)) {
-          if (todo.time === currentHourMin) {
-            const notifKey = `ls_notified_${todo.id}_${todayStr}`;
-            if (!localStorage.getItem(notifKey)) {
-              localStorage.setItem(notifKey, 'true');
-              sendSystemNotification(todo.title, todo.description || 'Task is due now! 🔔');
-            }
-          }
-        }
-      });
-    };
-
-    const interval = setInterval(checkReminders, 30000); // Check every 30 seconds
-    return () => clearInterval(interval);
-  }, [todos]);
-
-  useEffect(() => {
-    const prompted = localStorage.getItem('ls_notif_prompted');
-    if (!prompted) {
-      const timer = setTimeout(async () => {
-        if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
-          try {
-            const { LocalNotifications } = await import('@capacitor/local-notifications');
-            const status = await LocalNotifications.checkPermissions();
-            if (status.receive !== 'granted') {
-              setShowNotifPrompt(true);
-            }
-          } catch (e) {
-            console.error(e);
-          }
-        } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
-          setShowNotifPrompt(true);
-        }
-      }, 3000); // Trigger prompt on mount after 3 seconds
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
-  const handleAllowNotifications = async () => {
-    localStorage.setItem('ls_notif_prompted', 'true');
-    setShowNotifPrompt(false);
-    if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
-      try {
-        const { LocalNotifications } = await import('@capacitor/local-notifications');
-        let status = await LocalNotifications.checkPermissions();
-        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
-          status = await LocalNotifications.requestPermissions();
-        }
-        if (status.receive === 'granted') {
-          alert("Alert notification settings enabled successfully! 🔔");
-          syncCapacitorNotifications(todos);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    } else if (typeof window !== 'undefined' && 'Notification' in window) {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        alert("Alert notification settings enabled successfully! 🔔");
-      }
-    }
-  };
-
-  const handleDismissNotifications = () => {
-    localStorage.setItem('ls_notif_prompted', 'true');
-    setShowNotifPrompt(false);
-  };
+  // Legacy hooks removed
 
 
   // Theme Mode Effect
@@ -348,34 +173,6 @@ const App: React.FC = () => {
           clearData={handleClearData}
         />
       )}
-      {showNotifPrompt && (
-        <div className="fixed bottom-6 left-6 z-[100] glass-panel p-6 rounded-[2rem] shadow-2xl animate-slide-in-left max-w-sm border border-brand-500/20 bg-gradient-to-tr from-brand-50/50 to-transparent dark:from-brand-950/20">
-          <div className="flex gap-4">
-            <div className="w-12 h-12 bg-brand-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-brand-500/30 shrink-0">
-              <Bell size={24} className="animate-bounce" />
-            </div>
-            <div>
-              <h4 className="font-bold text-gray-900 dark:text-white font-display text-base">Enable Reminders?</h4>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mt-1 leading-relaxed">
-                Get push notifications for your daily tasks, habits, and streak reminders!
-              </p>
-              <div className="flex gap-2 mt-4">
-                <button 
-                  onClick={handleAllowNotifications}
-                  className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
-                >
-                  Enable
-                </button>
-                <button 
-                  onClick={handleDismissNotifications}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl text-xs font-bold transition-all"
-                >
-                  Maybe Later
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </Layout>
   );
