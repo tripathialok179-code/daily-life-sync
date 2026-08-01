@@ -8,7 +8,7 @@ import CalendarView from './components/CalendarView';
 import { AppView, ThemeMode, ThemeColor, TodoItem, JournalEntry, CustomList, migrateTodos, getLocalTodayString, isTaskActiveOnDate, isTaskCompletedOnDate } from './types';
 import { Bell } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { requestNotificationPermissions } from './utils/NotificationService';
+import { requestNotificationPermissions, syncCapacitorNotifications } from './utils/NotificationService';
 
 // RGB values for themes
 const THEME_COLORS: Record<ThemeColor, Record<string, string>> = {
@@ -69,7 +69,7 @@ const App: React.FC = () => {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         const granted = await LocalNotifications.checkPermissions();
-        if (granted.receive === 'granted') {
+        if (granted.display === 'granted') {
           await LocalNotifications.schedule({
             notifications: [
               {
@@ -147,10 +147,10 @@ const App: React.FC = () => {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         let status = await LocalNotifications.checkPermissions();
-        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+        if (status.display === 'prompt' || status.display === 'prompt-with-rationale') {
           status = await LocalNotifications.requestPermissions();
         }
-        if (status.receive === 'granted') {
+        if (status.display === 'granted') {
           alert("Alert notification settings enabled successfully! 🔔");
           syncCapacitorNotifications(todos);
         }

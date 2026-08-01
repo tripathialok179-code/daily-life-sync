@@ -3,7 +3,7 @@ import { TodoItem, Timeframe, getLocalTodayString, formatLocalDate, isTaskActive
 import { Plus, Trash2, Calendar, CheckCircle2, Circle, Trophy, ArrowRight, X as XIcon, RefreshCw, Flame, BarChart2, Check, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Ripple from './Ripple';
-import { scheduleReminder, cancelReminder, generateNumericId } from '../utils/NotificationService';
+import { scheduleReminder, cancelReminder, generateNumericId, parseLocalDateAndTime } from '../utils/NotificationService';
 
 interface TodoViewProps {
   todos: TodoItem[];
@@ -190,9 +190,7 @@ const TodoView: React.FC<TodoViewProps> = ({ todos, setTodos, journalEntries = [
     
     // Schedule local notification if time is provided
     if (todo.time && todo.dueDate) {
-      const [hours, minutes] = todo.time.split(':').map(Number);
-      const scheduleTime = new Date(todo.dueDate);
-      scheduleTime.setHours(hours, minutes, 0, 0);
+      const scheduleTime = parseLocalDateAndTime(todo.dueDate, todo.time);
       if (scheduleTime > new Date()) {
         scheduleReminder(generateNumericId(todo.id), todo.title, todo.description || 'Task is due!', scheduleTime);
       }

@@ -20,7 +20,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
         try {
           const { LocalNotifications } = await import('@capacitor/local-notifications');
           const status = await LocalNotifications.checkPermissions();
-          setNotifPermission(status.receive);
+          setNotifPermission(status.display);
         } catch (e) {
           console.error("Capacitor check permissions error:", e);
         }
@@ -36,11 +36,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ theme, setTheme, themeColor
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         let status = await LocalNotifications.checkPermissions();
-        if (status.receive === 'prompt' || status.receive === 'prompt-with-rationale') {
+        if (status.display === 'prompt' || status.display === 'prompt-with-rationale') {
           status = await LocalNotifications.requestPermissions();
         }
-        setNotifPermission(status.receive);
-        if (status.receive === 'granted') {
+        setNotifPermission(status.display);
+        if (status.display === 'granted') {
           alert("System notifications enabled successfully! 🔔");
         } else {
           alert("Notifications blocked. Please navigate to your Phone Settings -> Apps -> Daily Life Sync -> Notifications and enable them manually!");
