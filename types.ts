@@ -50,9 +50,15 @@ export const getLocalTodayString = (): string => {
 
 // Utility: Format a local yyyy-mm-dd date safely avoiding timezone shifts
 export const formatLocalDate = (dateStr: string, options: Intl.DateTimeFormatOptions): string => {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr || '';
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
-  const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return dateStr;
+  const date = new Date(year, month, day);
+  if (isNaN(date.getTime())) return dateStr;
   return date.toLocaleDateString(undefined, options);
 };
 
@@ -60,35 +66,44 @@ export const formatLocalDate = (dateStr: string, options: Intl.DateTimeFormatOpt
 export const migrateTodos = (todos: any[]): TodoItem[] => {
   if (!Array.isArray(todos)) return [];
   return todos.map(todo => {
+    if (!todo || typeof todo !== 'object') return null;
     if (todo.timeframe && !todo.recurrence) {
       return {
-        id: todo.id,
-        title: todo.title,
+        id: todo.id || crypto.randomUUID(),
+        title: todo.title || 'Untitled Task',
         description: todo.description || '',
         dueDate: todo.dueDate || null,
         time: todo.time || null,
         recurrence: 'none',
-        completed: todo.completed || false,
+        completed: Boolean(todo.completed),
         completedAt: todo.completedAt,
-        archived: todo.archived || false,
-        completedDates: todo.completedDates || []
+        archived: Boolean(todo.archived),
+        completedDates: Array.isArray(todo.completedDates) ? todo.completedDates : []
       };
     }
     return {
       ...todo,
+      id: todo.id || crypto.randomUUID(),
+      title: todo.title || 'Untitled Task',
+      description: todo.description || '',
+      dueDate: todo.dueDate || null,
+      time: todo.time || null,
       recurrence: todo.recurrence || 'none',
-      completedDates: todo.completedDates || []
+      completed: Boolean(todo.completed),
+      completedDates: Array.isArray(todo.completedDates) ? todo.completedDates : []
     };
-  });
+  }).filter(Boolean) as TodoItem[];
 };
 
 // Helper: Determine if a task/routine is active/due on a given date "yyyy-mm-dd"
 export const isTaskActiveOnDate = (task: TodoItem, dateStr: string): boolean => {
+  if (!task || !dateStr || typeof dateStr !== 'string') return false;
+
   if (!task.dueDate) {
     if (task.recurrence === 'daily') return true;
     if (task.recurrence === 'none') return false;
   } else {
-    if (dateStr < task.dueDate) return false;
+    if (typeof task.dueDate === 'string' && dateStr < task.dueDate) return false;
   }
 
   switch (task.recurrence) {
@@ -97,17 +112,27 @@ export const isTaskActiveOnDate = (task: TodoItem, dateStr: string): boolean => 
     case 'daily':
       return true;
     case 'weekly':
-      if (!task.weekdays || task.weekdays.length === 0) return false;
+      if (!task.weekdays || !Array.isArray(task.weekdays) || task.weekdays.length === 0) return false;
       const parts = dateStr.split('-');
-      const dayOfWeek = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getDay();
+      if (parts.length < 3) return false;
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+      const dayOfWeek = new Date(year, month, day).getDay();
       return task.weekdays.includes(dayOfWeek);
     case 'monthly':
-      if (!task.dueDate) return false;
-      const targetDay = parseInt(task.dueDate.split('-')[2]);
-      const currentDay = parseInt(dateStr.split('-')[2]);
+      if (!task.dueDate || typeof task.dueDate !== 'string') return false;
+      const dueParts = task.dueDate.split('-');
+      const currParts = dateStr.split('-');
+      if (dueParts.length < 3 || currParts.length < 3) return false;
+      const targetDay = parseInt(dueParts[2], 10);
+      const currentDay = parseInt(currParts[2], 10);
+      if (isNaN(targetDay) || isNaN(currentDay)) return false;
       return targetDay === currentDay;
     case 'yearly':
-      if (!task.dueDate) return false;
+      if (!task.dueDate || typeof task.dueDate !== 'string' || task.dueDate.length < 5) return false;
+      if (dateStr.length < 5) return false;
       const targetMonthDay = task.dueDate.substring(5); // "MM-DD"
       const currentMonthDay = dateStr.substring(5); // "MM-DD"
       return targetMonthDay === currentMonthDay;
@@ -118,8 +143,9 @@ export const isTaskActiveOnDate = (task: TodoItem, dateStr: string): boolean => 
 
 // Helper: Determine if a task/routine is marked as completed on a given date
 export const isTaskCompletedOnDate = (task: TodoItem, dateStr: string): boolean => {
+  if (!task) return false;
   if (task.recurrence === 'none') {
-    return task.completed;
+    return Boolean(task.completed);
   }
-  return task.completedDates?.includes(dateStr) || false;
+  return Array.isArray(task.completedDates) ? task.completedDates.includes(dateStr) : false;
 };
