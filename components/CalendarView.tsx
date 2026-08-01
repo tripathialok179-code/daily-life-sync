@@ -142,19 +142,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
 
   // Schedule 15-minute early reminders for active tasks (acting as calendar events)
   useEffect(() => {
-    todos.forEach(todo => {
-      if (!todo.archived && todo.time && todo.dueDate && !todo.completed) {
-        const scheduleTime = parseLocalDateAndTime(todo.dueDate, todo.time);
-        
-        // 15 minutes before the event
-        const earlyReminderTime = new Date(scheduleTime.getTime() - 15 * 60000);
-        
-        if (earlyReminderTime > new Date()) {
-          const earlyId = generateNumericId(todo.id + "_early");
-          scheduleReminder(earlyId, `Upcoming: ${todo.title}`, `Starts in 15 minutes!`, earlyReminderTime);
+    try {
+      if (!Array.isArray(todos)) return;
+      todos.forEach(todo => {
+        if (todo && !todo.archived && todo.time && todo.dueDate && !todo.completed) {
+          const scheduleTime = parseLocalDateAndTime(todo.dueDate, todo.time);
+          
+          // 15 minutes before the event
+          const earlyReminderTime = new Date(scheduleTime.getTime() - 15 * 60000);
+          
+          if (earlyReminderTime > new Date()) {
+            const earlyId = generateNumericId(todo.id + "_early");
+            scheduleReminder(earlyId, `Upcoming: ${todo.title}`, `Starts in 15 minutes!`, earlyReminderTime).catch(console.error);
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      console.error("Calendar reminder error:", e);
+    }
   }, [todos]);
 
   const renderDetails = () => {
