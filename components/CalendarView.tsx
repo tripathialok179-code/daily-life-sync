@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { TodoItem, JournalEntry, AppView, isTaskActiveOnDate, isTaskCompletedOnDate, getLocalTodayString, formatLocalDate } from '../types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, BookOpen, CheckCircle2, Circle, Trophy, ArrowRight, Plus, X } from 'lucide-react';
 import Ripple from './Ripple';
-import { scheduleReminder, cancelReminder, generateNumericId } from '../utils/NotificationService';
+import { scheduleReminder, cancelReminder, generateNumericId, parseLocalDateAndTime } from '../utils/NotificationService';
 
 interface CalendarViewProps {
   todos: TodoItem[];
@@ -144,9 +144,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ todos, journalEntries, setT
   useEffect(() => {
     todos.forEach(todo => {
       if (!todo.archived && todo.time && todo.dueDate && !todo.completed) {
-        const [hours, minutes] = todo.time.split(':').map(Number);
-        const scheduleTime = new Date(todo.dueDate);
-        scheduleTime.setHours(hours, minutes, 0, 0);
+        const scheduleTime = parseLocalDateAndTime(todo.dueDate, todo.time);
         
         // 15 minutes before the event
         const earlyReminderTime = new Date(scheduleTime.getTime() - 15 * 60000);
