@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { TodoItem, isTaskActiveOnDate, isTaskCompletedOnDate } from '../types';
 
 /**
  * Utility to parse YYYY-MM-DD date string and optional HH:MM time into a local Date object.
@@ -106,10 +107,42 @@ export const generateNumericId = (idString: string): number => {
 };
 
 /**
- * Global synchronization helper for scheduling notifications for all active tasks.
+ * Helper to calculate the next upcoming Date occurrence for a task or routine.
  */
-export const syncCapacitorNotifications = async (todos: any[]) => {
-  if (!Capacitor.isNativePlatform()) return;
+export const getNextTaskOccurrence = (todo: TodoItem): Date | null => {
+  if (!todo || todo.archived || !todo.time) return null;
+
+  const now = new Date();
+  const formatDateStr = (d: Date) => 
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  if (todo.recurrence === 'none') {
+    if (todo.completed || !todo.dueDate) return null;
+    const scheduled = parseLocalDateAndTime(todo.dueDate, todo.time);
+    return scheduled > now ? scheduled : null;
+  }
+
+  const checkDate = new Date();
+  for (let i = 0; i <= 366; i++) {
+    const dateStr = formatDateStr(checkDate);
+    if (isTaskActiveOnDate(todo, dateStr) && !isTaskCompletedOnDate(todo, dateStr)) {
+      const scheduled = parseLocalDateAndTime(dateStr, todo.time);
+      if (scheduled > now) {
+        return scheduled;
+      }
+    }
+    checkDate.setDate(checkDate.getDate() + 1);
+  }
+
+  return null;
+};
+
+/**
+ * Global synchronization helper for scheduling notifications for all active tasks.
+ * Syncs both single and recurring tasks with Android AlarmManager.
+ */
+export const syncCapacitorNotifications = async (todos: TodoItem[]) => {
+  if (!Capacitor.isNativePlatform() || !Array.isArray(todos)) return;
   try {
     const permission = await LocalNotifications.checkPermissions();
     if (permission.display !== 'granted') return;
@@ -123,19 +156,22 @@ export const syncCapacitorNotifications = async (todos: any[]) => {
       vibration: true
     });
 
-    const now = new Date();
+    // Clear previously pending scheduled alarms to avoid stale or duplicate triggers
+    const pending = await LocalNotifications.getPending();
+    if (pending && pending.notifications && pending.notifications.length > 0) {
+      await LocalNotifications.cancel(pending);
+    }
+
     const notificationsToSchedule = [];
 
     for (const todo of todos) {
-      if (todo.archived || !todo.time || !todo.dueDate || todo.completed) continue;
-
-      const scheduleTime = parseLocalDateAndTime(todo.dueDate, todo.time);
-      if (scheduleTime > now) {
+      const nextOccurrence = getNextTaskOccurrence(todo);
+      if (nextOccurrence) {
         notificationsToSchedule.push({
           title: todo.title,
           body: todo.description || 'Task is due now! 🔔',
           id: generateNumericId(todo.id),
-          schedule: { at: scheduleTime, allowWhileIdle: true },
+          schedule: { at: nextOccurrence, allowWhileIdle: true },
           channelId: 'reminders',
         });
       }

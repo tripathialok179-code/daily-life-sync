@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TodoItem, JournalEntry, AppView, isTaskActiveOnDate, isTaskCompletedOnDate, getLocalTodayString, formatLocalDate } from '../types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, BookOpen, CheckCircle2, Circle, Trophy, ArrowRight, Plus, X } from 'lucide-react';
 import Ripple from './Ripple';

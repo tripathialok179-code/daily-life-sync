@@ -88,8 +88,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Synchronize IPC notifications on desktop whenever tasks change
+  // Synchronize IPC notifications on desktop and Capacitor notifications on Android whenever tasks change
   useEffect(() => {
+    // Sync native Capacitor notifications (Android AlarmManager)
+    syncCapacitorNotifications(todos);
 
     // Sync to Electron main process for deep-background notifications
     const electronRequire = (window as any).require;
