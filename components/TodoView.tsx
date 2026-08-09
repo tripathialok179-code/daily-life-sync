@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { TodoItem, Timeframe, getLocalTodayString, formatLocalDate, isTaskActiveOnDate, isTaskCompletedOnDate } from '../types';
+import { TodoItem, getLocalTodayString, formatLocalDate, isTaskActiveOnDate, isTaskCompletedOnDate } from '../types';
 import { Plus, Trash2, Calendar, CheckCircle2, Circle, Trophy, ArrowRight, X as XIcon, RefreshCw, Flame, BarChart2, Check, Award } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import Ripple from './Ripple';
